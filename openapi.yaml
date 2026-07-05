@@ -1,0 +1,2048 @@
+openapi: 3.1.0
+info:
+  title: SGE - Sistema de Gestión Escolar
+  version: 1.0.0
+  description: API REST del Sistema de Gestión Escolar. Stack: Spring Boot 3.3+ / Java 21 / PostgreSQL 16.
+  contact:
+    name: Equipo SGE
+  license:
+    name: Propietario
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Desarrollo local
+  - url: https://sge-dev.escuela.edu/api/v1
+    description: Desarrollo (Dev)
+  - url: https://sge-prod.escuela.edu/api/v1
+    description: Producción
+
+paths:
+
+  # ────────────────────────────── AUTH ──────────────────────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refrescar token JWT
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: Token renovado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Cerrar sesión (invalidar refresh token)
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Sesión cerrada
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Obtener usuario autenticado
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Datos del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioInfoResponse'
+
+  # ──────────────────────────── PERIODOS ───────────────────────────
+  /periodos:
+    get:
+      tags: [Periodos]
+      summary: Listar periodos académicos
+      operationId: listarPeriodos
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [PLANIFICACION, ACTIVO, CERRADO, FINALIZADO]
+      responses:
+        '200':
+          description: Lista de periodos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PeriodoAcademicoResponse'
+    post:
+      tags: [Periodos]
+      summary: Crear periodo académico
+      operationId: crearPeriodo
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeriodoCreateRequest'
+      responses:
+        '201':
+          description: Periodo creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodoAcademicoResponse'
+
+  /periodos/activo:
+    get:
+      tags: [Periodos]
+      summary: Obtener periodo activo actual
+      operationId: obtenerPeriodoActivo
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Periodo activo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodoAcademicoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /periodos/{periodoId}/activar-plan:
+    put:
+      tags: [Periodos]
+      summary: Activar plan de estudios del periodo
+      operationId: activarPlanPeriodo
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: periodoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Plan activado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeriodoAcademicoResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /periodos/{periodoId}/alumnos/importar:
+    post:
+      tags: [Periodos, Alumnos]
+      summary: Importar alumnos desde Excel
+      operationId: importarAlumnos
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: periodoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archivo:
+                  type: string
+                  format: binary
+                  description: Archivo Excel (.xlsx)
+      responses:
+        '200':
+          description: Resultado de la importación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResultResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ──────────────────────────── CURSOS ─────────────────────────────
+  /cursos:
+    get:
+      tags: [Cursos]
+      summary: Listar cursos
+      operationId: listarCursos
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: periodoId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: gradoId
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: docenteId
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [BORRADOR, ASIGNADO, ACTIVO, FINALIZADO]
+      responses:
+        '200':
+          description: Lista de cursos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CursoResponse'
+    post:
+      tags: [Cursos]
+      summary: Crear curso
+      operationId: crearCurso
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CursoCreateRequest'
+      responses:
+        '201':
+          description: Curso creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursoResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cursos/{cursoId}/asignar-docente-aula:
+    put:
+      tags: [Cursos]
+      summary: Asignar docente y aula a un curso
+      operationId: asignarDocenteAula
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AsignacionDocenteAulaRequest'
+      responses:
+        '200':
+          description: Asignación actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CursoResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /cursos/{cursoId}/horario:
+    get:
+      tags: [Cursos, Horario]
+      summary: Obtener horario de un curso
+      operationId: obtenerHorarioCurso
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Bloques horarios del curso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HorarioBloqueResponse'
+
+  # ──────────────────────────── HORARIO ────────────────────────────
+  /horario/bloques:
+    post:
+      tags: [Horario]
+      summary: Crear bloque horario
+      operationId: crearBloqueHorario
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HorarioBloqueCreateRequest'
+      responses:
+        '201':
+          description: Bloque creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HorarioBloqueResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /horario/bloques/{bloqueId}/mover:
+    post:
+      tags: [Horario]
+      summary: Mover bloque horario (drag & drop)
+      operationId: moverBloqueHorario
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bloqueId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoverBloqueRequest'
+      responses:
+        '200':
+          description: Bloque movido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HorarioBloqueResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /horario/generar-automatico:
+    post:
+      tags: [Horario]
+      summary: Generar horario automático (OptaPlanner/CSP)
+      operationId: generarHorarioAutomatico
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: periodoId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '202':
+          description: Generación iniciada (async)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobInfoResponse'
+
+  /horario/jobs/{jobId}:
+    get:
+      tags: [Horario]
+      summary: Consultar estado de job de generación
+      operationId: consultarJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Estado del job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobInfoResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /horario/semanal:
+    get:
+      tags: [Horario]
+      summary: Obtener horario semanal (vista: grado|docente|aula)
+      operationId: obtenerHorarioSemanal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vista
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [grado, docente, aula]
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Horario semanal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HorarioSemanalResponse'
+
+  /horario/exportar:
+    get:
+      tags: [Horario]
+      summary: Exportar horario (PDF/Excel)
+      operationId: exportarHorario
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: vista
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [grado, docente, aula]
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: formato
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [PDF, EXCEL]
+      responses:
+        '200':
+          description: Archivo exportado
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  # ──────────────────────────── NOTAS ──────────────────────────────
+  /cursos/{cursoId}/bimestres/{bimestreId}/notas:
+    get:
+      tags: [Notas]
+      summary: Obtener matriz de notas de un curso por bimestre
+      operationId: obtenerNotasCurso
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: bimestreId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Matriz de notas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlumnoNotasResponse'
+    put:
+      tags: [Notas]
+      summary: Actualizar notas (bulk)
+      operationId: actualizarNotas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: bimestreId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotaUpsertRequest'
+      responses:
+        '200':
+          description: Notas actualizadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkUpdateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /cursos/{cursoId}/bimestres/{bimestreId}/notas/importar:
+    post:
+      tags: [Notas]
+      summary: Importar notas desde Excel
+      operationId: importarNotas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: bimestreId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                archivo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Notas importadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResultResponse'
+
+  /cursos/{cursoId}/bimestres/{bimestreId}/publicar:
+    post:
+      tags: [Notas]
+      summary: Publicar notas de un bimestre
+      operationId: publicarNotas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: bimestreId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Notas publicadas
+
+  /alumnos/{alumnoId}/periodos/{periodoId}/reporte-notas:
+    get:
+      tags: [Notas, Alumnos]
+      summary: Obtener reporte de notas del alumno por periodo
+      operationId: reporteNotasAlumno
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: periodoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Reporte de notas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteNotasAlumnoResponse'
+
+  /alumnos/{alumnoId}/cursos/{cursoId}/tendencia:
+    get:
+      tags: [Notas, Alumnos]
+      summary: Obtener tendencia de notas por curso
+      operationId: tendenciaNotasCurso
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Datos de tendencia
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bimestres:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BimestreResponse'
+                  notas:
+                    type: array
+                    items:
+                      type: number
+                      format: float
+                  promedioGeneral:
+                    type: number
+                    format: float
+
+  # ──────────────────────────── ASISTENCIA ─────────────────────────
+  /cursos/{cursoId}/sesiones:
+    get:
+      tags: [Asistencia]
+      summary: Obtener sesiones de un curso (por fecha opcional)
+      operationId: listarSesiones
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: fecha
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Lista de sesiones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SesionClaseResponse'
+
+  /sesiones/{sesionId}/asistencia:
+    get:
+      tags: [Asistencia]
+      summary: Obtener lista de asistencia de una sesión
+      operationId: obtenerAsistenciaSesion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sesionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Lista de asistencia
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AsistenciaAlumnoResponse'
+    put:
+      tags: [Asistencia]
+      summary: Actualizar asistencia de sesión
+      operationId: actualizarAsistencia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sesionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/AsistenciaUpsertRequest'
+      responses:
+        '200':
+          description: Asistencia actualizada
+
+  /sesiones/{sesionId}/asistencia/{alumnoId}:
+    patch:
+      tags: [Asistencia]
+      summary: Corregir asistencia de un alumno (ventana 48h)
+      operationId: corregirAsistencia
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sesionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AsistenciaUpsertRequest'
+      responses:
+        '200':
+          description: Asistencia corregida
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+
+  /sesiones/{sesionId}/confirmar:
+    post:
+      tags: [Asistencia]
+      summary: Confirmar sesión de clase
+      operationId: confirmarSesion
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sesionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        description: Datos opcionales de confirmación
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmarSesionRequest'
+      responses:
+        '200':
+          description: Sesión confirmada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SesionClaseResponse'
+
+  # ──────────────────────────── ALERTAS ────────────────────────────
+  /alertas/faltas-consecutivas:
+    get:
+      tags: [Alertas]
+      summary: Obtener alertas de faltas consecutivas
+      operationId: listarAlertasFaltas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [NUEVA, VISTA, RESUELTA]
+        - name: nivel
+          in: query
+          schema:
+            type: string
+            enum: [ALTA, CRITICA]
+      responses:
+        '200':
+          description: Lista de alertas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertaFaltasResponse'
+
+  # ──────────────────────────── ESTADOS ALUMNO ─────────────────────
+  /estados-alumno:
+    get:
+      tags: [EstadosAlumno]
+      summary: Listar estados de alumno
+      operationId: listarEstadosAlumno
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de estados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EstadoAlumnoResponse'
+
+  /estados-alumno/transiciones:
+    get:
+      tags: [EstadosAlumno]
+      summary: Listar transiciones permitidas entre estados
+      operationId: listarTransiciones
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Grafo de transiciones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TransicionEstadoResponse'
+
+  /alumnos/{alumnoId}/historial-estados:
+    get:
+      tags: [EstadosAlumno]
+      summary: Obtener historial de estados de un alumno
+      operationId: historialEstadosAlumno
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Historial ordenado por fecha desc
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HistorialEstadoResponse'
+
+  /alumnos/{alumnoId}/transicion-estado:
+    post:
+      tags: [EstadosAlumno]
+      summary: Ejecutar transición de estado en un alumno
+      operationId: transicionarEstadoAlumno
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransicionEstadoRequest'
+      responses:
+        '200':
+          description: Estado actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlumnoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  # ──────────────────────────── ALUMNOS ────────────────────────────
+  /alumnos/{alumnoId}/padres:
+    get:
+      tags: [Alumnos]
+      summary: Listar padres asociados a un alumno
+      operationId: listarPadresAlumno
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Lista de padres
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PadreResponse'
+    post:
+      tags: [Alumnos]
+      summary: Asociar padre existente a un alumno
+      operationId: asociarPadreAlumno
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AsociarPadreRequest'
+      responses:
+        '201':
+          description: Padre asociado
+
+  /alumnos/{alumnoId}/padres/nuevo:
+    post:
+      tags: [Alumnos]
+      summary: Crear padre y asociarlo a un alumno
+      operationId: crearYAsociarPadre
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearPadreRequest'
+      responses:
+        '201':
+          description: Padre creado y asociado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PadreResponse'
+
+  # ──────────────────────────── DOCENTES ───────────────────────────
+  /docentes:
+    get:
+      tags: [Docentes]
+      summary: Listar docentes
+      operationId: listarDocentes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: especialidad
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de docentes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocenteResponse'
+    post:
+      tags: [Docentes]
+      summary: Crear docente
+      operationId: crearDocente
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrearDocenteRequest'
+      responses:
+        '201':
+          description: Docente creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocenteResponse'
+
+  /docentes/{docenteId}/carga-horaria:
+    get:
+      tags: [Docentes]
+      summary: Obtener carga horaria de un docente por periodo
+      operationId: cargaHorariaDocente
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: docenteId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: periodoId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Carga horaria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CargaHorariaResponse'
+
+  # ──────────────────────────── REPORTES ───────────────────────────
+  /reportes/libreta/alumno/{alumnoId}/bimestre/{bimestreId}:
+    get:
+      tags: [Reportes]
+      summary: Generar libreta de notas PDF (alumno)
+      operationId: generarLibretaAlumno
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alumnoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: bimestreId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: PDF de libreta
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /reportes/libreta/curso/{cursoId}/bimestre/{bimestreId}:
+    get:
+      tags: [Reportes]
+      summary: Generar acta de notas PDF (curso)
+      operationId: generarActaCurso
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: bimestreId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: PDF de acta
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /reportes/rendimiento/grado/{gradoId}/periodo/{periodoId}:
+    get:
+      tags: [Reportes]
+      summary: Generar reporte de rendimiento por grado
+      operationId: reporteRendimientoGrado
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gradoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: periodoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: formato
+          in: query
+          schema:
+            type: string
+            enum: [PDF, EXCEL]
+            default: PDF
+      responses:
+        '200':
+          description: Reporte de rendimiento
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido de /auth/login
+
+  responses:
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: No autenticado o token inválido/expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: No tiene permisos para este recurso
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Conflicto con regla de negocio
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unprocessable:
+      description: Entidad no procesable (ej. ventana 48h vencida)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+
+    # ────────────── AUTH ──────────────
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: jperez
+        password:
+          type: string
+          format: password
+          example: MiPassword123
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+        tokenType:
+          type: string
+          default: Bearer
+        usuario:
+          $ref: '#/components/schemas/UsuarioInfoResponse'
+    RefreshTokenRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+    UsuarioInfoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            type: string
+        permisos:
+          type: array
+          items:
+            type: string
+        persona:
+          $ref: '#/components/schemas/PersonaResponse'
+
+    # ────────────── PERSONA ──────────────
+    PersonaResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        dni:
+          type: string
+          pattern: '^\d{8}$'
+        nombres:
+          type: string
+        apellidos:
+          type: string
+        fechaNac:
+          type: string
+          format: date
+        genero:
+          type: string
+          enum: [M, F, X]
+        telefono:
+          type: string
+        direccion:
+          type: string
+        fotoUrl:
+          type: string
+          format: uri
+
+    # ────────────── PERIODOS ──────────────
+    PeriodoCreateRequest:
+      type: object
+      required: [nombre, codigo, fechaInicio, fechaFin]
+      properties:
+        nombre:
+          type: string
+          example: Año Académico 2026
+        codigo:
+          type: string
+          example: ANO-2026
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+    PeriodoAcademicoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        nombre:
+          type: string
+        codigo:
+          type: string
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+        estado:
+          type: string
+          enum: [PLANIFICACION, ACTIVO, CERRADO, FINALIZADO]
+
+    # ────────────── CURSOS ──────────────
+    CursoCreateRequest:
+      type: object
+      required: [periodoId, gradoId, seccionId, materiaId]
+      properties:
+        periodoId:
+          type: integer
+          format: int64
+        gradoId:
+          type: integer
+          format: int64
+        seccionId:
+          type: integer
+          format: int64
+        materiaId:
+          type: integer
+          format: int64
+        docenteId:
+          type: integer
+          format: int64
+          nullable: true
+        aulaId:
+          type: integer
+          format: int64
+          nullable: true
+    CursoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        periodo:
+          $ref: '#/components/schemas/PeriodoAcademicoResponse'
+        grado:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            nombre:
+              type: string
+            nivel:
+              type: string
+              enum: [INICIAL, PRIMARIA, SECUNDARIA]
+        seccion:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            nombre:
+              type: string
+        materia:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            nombre:
+              type: string
+            codigo:
+              type: string
+            horasSemanales:
+              type: integer
+        docente:
+          $ref: '#/components/schemas/DocenteResponse'
+          nullable: true
+        aula:
+          $ref: '#/components/schemas/AulaResponse'
+          nullable: true
+        estado:
+          type: string
+          enum: [BORRADOR, ASIGNADO, ACTIVO, FINALIZADO]
+    AsignacionDocenteAulaRequest:
+      type: object
+      properties:
+        docenteId:
+          type: integer
+          format: int64
+          nullable: true
+        aulaId:
+          type: integer
+          format: int64
+          nullable: true
+    AulaResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        nombre:
+          type: string
+        codigo:
+          type: string
+        capacidad:
+          type: integer
+        tipo:
+          type: string
+          enum: [COMUN, LABORATORIO, TALLER, DEPORTIVO]
+
+    # ────────────── HORARIO ──────────────
+    HorarioBloqueCreateRequest:
+      type: object
+      required: [cursoId, diaSemana, horaInicio, horaFin]
+      properties:
+        cursoId:
+          type: integer
+          format: int64
+        aulaId:
+          type: integer
+          format: int64
+        diaSemana:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: 1=lunes, 5=viernes
+        horaInicio:
+          type: string
+          format: time
+          example: '08:00'
+        horaFin:
+          type: string
+          format: time
+          example: '09:30'
+    HorarioBloqueResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        diaSemana:
+          type: integer
+        horaInicio:
+          type: string
+        horaFin:
+          type: string
+        curso:
+          $ref: '#/components/schemas/CursoResponse'
+        aula:
+          $ref: '#/components/schemas/AulaResponse'
+    MoverBloqueRequest:
+      type: object
+      required: [nuevoDia, nuevaHoraInicio, nuevaHoraFin]
+      properties:
+        nuevoDia:
+          type: integer
+          minimum: 1
+          maximum: 5
+        nuevaHoraInicio:
+          type: string
+          format: time
+        nuevaHoraFin:
+          type: string
+          format: time
+        aulaId:
+          type: integer
+          format: int64
+          nullable: true
+    HorarioSemanalResponse:
+      type: object
+      properties:
+        vista:
+          type: string
+          enum: [grado, docente, aula]
+        titulo:
+          type: string
+        bloques:
+          type: array
+          items:
+            $ref: '#/components/schemas/HorarioBloqueResponse'
+    JobInfoResponse:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        estado:
+          type: string
+          enum: [PENDING, RUNNING, COMPLETED, FAILED]
+        progreso:
+          type: integer
+          description: Porcentaje 0-100
+        resultado:
+          type: object
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    # ────────────── BIMESTRES ──────────────
+    BimestreResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        numero:
+          type: integer
+        nombre:
+          type: string
+        fechaInicio:
+          type: string
+          format: date
+        fechaFin:
+          type: string
+          format: date
+        estado:
+          type: string
+          enum: [ABIERTO, CERRADO, PUBLICADO]
+
+    # ────────────── NOTAS ──────────────
+    NotaUpsertRequest:
+      type: object
+      required: [alumnoId, evaluacionId, valor]
+      properties:
+        alumnoId:
+          type: integer
+          format: int64
+        evaluacionId:
+          type: integer
+          format: int64
+        valor:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 20
+        observacion:
+          type: string
+          maxLength: 500
+    AlumnoNotasResponse:
+      type: object
+      properties:
+        alumno:
+          $ref: '#/components/schemas/AlumnoResumenResponse'
+        evaluaciones:
+          type: array
+          items:
+            type: object
+            properties:
+              evaluacionId:
+                type: integer
+                format: int64
+              evaluacionNombre:
+                type: string
+              tipo:
+                type: string
+              ponderacion:
+                type: number
+                format: float
+              valor:
+                type: number
+                format: float
+                nullable: true
+        promedio:
+          type: number
+          format: float
+          nullable: true
+    BulkUpdateResponse:
+      type: object
+      properties:
+        actualizados:
+          type: integer
+        errores:
+          type: integer
+        detalles:
+          type: array
+          items:
+            type: object
+            properties:
+              alumnoId:
+                type: integer
+                format: int64
+              error:
+                type: string
+    ReporteNotasAlumnoResponse:
+      type: object
+      properties:
+        alumno:
+          $ref: '#/components/schemas/AlumnoResumenResponse'
+        periodo:
+          $ref: '#/components/schemas/PeriodoAcademicoResponse'
+        bimestres:
+          type: array
+          items:
+            type: object
+            properties:
+              bimestre:
+                $ref: '#/components/schemas/BimestreResponse'
+              cursos:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    curso:
+                      $ref: '#/components/schemas/CursoResponse'
+                    notaFinal:
+                      type: number
+                      format: float
+                      nullable: true
+
+    # ────────────── ASISTENCIA ──────────────
+    SesionClaseResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        curso:
+          $ref: '#/components/schemas/CursoResponse'
+        fecha:
+          type: string
+          format: date
+        horaInicio:
+          type: string
+        horaFin:
+          type: string
+        tema:
+          type: string
+        estado:
+          type: string
+          enum: [PROGRAMADA, EN_CURSO, CONFIRMADA, ANULADA]
+    AsistenciaUpsertRequest:
+      type: object
+      required: [tipoAsistenciaCodigo]
+      properties:
+        alumnoId:
+          type: integer
+          format: int64
+        tipoAsistenciaCodigo:
+          type: string
+          enum: [PRESENTE, FALTA, TARDANZA, JUSTIFICADO, LICENCIA]
+        minutosTardanza:
+          type: integer
+          minimum: 0
+        observacion:
+          type: string
+    AsistenciaAlumnoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        alumno:
+          $ref: '#/components/schemas/AlumnoResumenResponse'
+        tipoAsistencia:
+          $ref: '#/components/schemas/TipoAsistenciaResponse'
+        minutosTardanza:
+          type: integer
+          nullable: true
+        observacion:
+          type: string
+          nullable: true
+    TipoAsistenciaResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+          enum: [PRESENTE, FALTA, TARDANZA, JUSTIFICADO, LICENCIA]
+        nombre:
+          type: string
+        computaComoPresente:
+          type: boolean
+    ConfirmarSesionRequest:
+      type: object
+      properties:
+        tema:
+          type: string
+          maxLength: 300
+
+    # ────────────── ALERTAS ──────────────
+    AlertaFaltasResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        alumno:
+          $ref: '#/components/schemas/AlumnoResumenResponse'
+        curso:
+          $ref: '#/components/schemas/CursoResponse'
+        cantidadConsecutivas:
+          type: integer
+        nivel:
+          type: string
+          enum: [ALTA, CRITICA]
+        estado:
+          type: string
+          enum: [NUEVA, VISTA, RESUELTA]
+        fechas:
+          type: array
+          items:
+            type: string
+            format: date
+        createdAt:
+          type: string
+          format: date-time
+
+    # ────────────── ESTADOS ALUMNO ──────────────
+    EstadoAlumnoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        codigo:
+          type: string
+        nombre:
+          type: string
+        esTerminal:
+          type: boolean
+        esTransitorio:
+          type: boolean
+        permisoAcceso:
+          type: boolean
+    TransicionEstadoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        origen:
+          $ref: '#/components/schemas/EstadoAlumnoResponse'
+        destino:
+          $ref: '#/components/schemas/EstadoAlumnoResponse'
+        codigoGatillante:
+          type: string
+        esAutomatica:
+          type: boolean
+        requiereAdmin:
+          type: boolean
+        requiereConsejo:
+          type: boolean
+        notificaPadre:
+          type: boolean
+    TransicionEstadoRequest:
+      type: object
+      required: [nuevoEstadoCodigo, motivo]
+      properties:
+        nuevoEstadoCodigo:
+          type: string
+          example: SUSPENDIDO
+        motivo:
+          type: string
+          maxLength: 1000
+        documentoUrl:
+          type: string
+          format: uri
+          nullable: true
+    HistorialEstadoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        estadoAnterior:
+          $ref: '#/components/schemas/EstadoAlumnoResponse'
+        estadoNuevo:
+          $ref: '#/components/schemas/EstadoAlumnoResponse'
+        motivo:
+          type: string
+        documentoUrl:
+          type: string
+          format: uri
+          nullable: true
+        fechaCambio:
+          type: string
+          format: date-time
+        usuario:
+          type: object
+          properties:
+            id:
+              type: integer
+              format: int64
+            username:
+              type: string
+            nombres:
+              type: string
+            apellidos:
+              type: string
+
+    # ────────────── ALUMNOS ──────────────
+    AlumnoResumenResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        codigoEstudiante:
+          type: string
+        dni:
+          type: string
+        nombres:
+          type: string
+        apellidos:
+          type: string
+        estadoActual:
+          $ref: '#/components/schemas/EstadoAlumnoResponse'
+    AlumnoResponse:
+      allOf:
+        - $ref: '#/components/schemas/PersonaResponse'
+        - type: object
+          properties:
+            codigoEstudiante:
+              type: string
+            estadoActual:
+              $ref: '#/components/schemas/EstadoAlumnoResponse'
+            subEstado:
+              type: string
+              nullable: true
+            fechaIngreso:
+              type: string
+              format: date
+            fechaUltimoEstado:
+              type: string
+              format: date-time
+            padres:
+              type: array
+              items:
+                $ref: '#/components/schemas/PadreResponse'
+    AsociarPadreRequest:
+      type: object
+      required: [padreId]
+      properties:
+        padreId:
+          type: integer
+          format: int64
+        parentesco:
+          type: string
+          enum: [PADRE, MADRE, APODERADO]
+          default: APODERADO
+        esTitular:
+          type: boolean
+          default: false
+    CrearPadreRequest:
+      type: object
+      required: [dni, nombres, apellidos]
+      properties:
+        dni:
+          type: string
+          pattern: '^\d{8}$'
+        nombres:
+          type: string
+        apellidos:
+          type: string
+        fechaNac:
+          type: string
+          format: date
+        genero:
+          type: string
+          enum: [M, F, X]
+        telefono:
+          type: string
+        direccion:
+          type: string
+        email:
+          type: string
+          format: email
+        parentesco:
+          type: string
+          enum: [PADRE, MADRE, APODERADO]
+        esTitular:
+          type: boolean
+
+    # ────────────── DOCENTES ──────────────
+    DocenteResponse:
+      allOf:
+        - $ref: '#/components/schemas/PersonaResponse'
+        - type: object
+          properties:
+            codigoEmpleado:
+              type: string
+            especialidad:
+              type: string
+            tipoContrato:
+              type: string
+            cargaHorariaMax:
+              type: integer
+    CrearDocenteRequest:
+      type: object
+      required: [dni, nombres, apellidos, codigoEmpleado, especialidad]
+      properties:
+        dni:
+          type: string
+          pattern: '^\d{8}$'
+        nombres:
+          type: string
+        apellidos:
+          type: string
+        fechaNac:
+          type: string
+          format: date
+        genero:
+          type: string
+          enum: [M, F, X]
+        telefono:
+          type: string
+        direccion:
+          type: string
+        email:
+          type: string
+          format: email
+        codigoEmpleado:
+          type: string
+        especialidad:
+          type: string
+        tipoContrato:
+          type: string
+        cargaHorariaMax:
+          type: integer
+          default: 40
+    CargaHorariaResponse:
+      type: object
+      properties:
+        docente:
+          $ref: '#/components/schemas/DocenteResponse'
+        totalHorasSemanales:
+          type: integer
+        cursosAsignados:
+          type: array
+          items:
+            $ref: '#/components/schemas/CursoResponse'
+
+    # ────────────── PADRES ──────────────
+    PadreResponse:
+      allOf:
+        - $ref: '#/components/schemas/PersonaResponse'
+        - type: object
+          properties:
+            parentesco:
+              type: string
+            esTitular:
+              type: boolean
+
+    # ────────────── MISC ──────────────
+    ImportResultResponse:
+      type: object
+      properties:
+        procesados:
+          type: integer
+        creados:
+          type: integer
+        errores:
+          type: integer
+        totalFilas:
+          type: integer
+        detalleErrores:
+          type: array
+          items:
+            type: object
+            properties:
+              fila:
+                type: integer
+              dni:
+                type: string
+              error:
+                type: string
+    ErrorResponse:
+      type: object
+      properties:
+        codigo:
+          type: string
+          description: Código interno del error (ej. COLISION_HORARIO, NOTA_FUERA_RANGO)
+        mensaje:
+          type: string
+          description: Mensaje legible
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+          format: uuid
+        detalles:
+          type: array
+          items:
+            type: object
+            properties:
+              campo:
+                type: string
+              error:
+                type: string
