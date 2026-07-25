@@ -15,8 +15,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,11 +32,13 @@ public class AuthService {
 
     private final Map<String, String> resetCodes = new ConcurrentHashMap<>();
 
-    public TokenResponse refresh(String token) {
-        if (!jwtService.isValid(token)) throw new BusinessRuleViolationException("TOKEN_INVALIDO", "Token inválido o expirado");
-        var username = jwtService.extractUsername(token);
-        var role = jwtService.extractRole(token);
-        return new TokenResponse(jwtService.generateToken(username, role), "Bearer", username, role);
+    public TokenResponse refresh(String refreshToken) {
+        if (!jwtService.isValid(refreshToken))
+            throw new BusinessRuleViolationException("TOKEN_INVALIDO", "Token inválido o expirado");
+        var username = jwtService.extractUsername(refreshToken);
+        var usuario = usuarioRepo.findByUsername(username)
+            .orElseThrow(() -> new BusinessRuleViolationException("USUARIO_NO_ENCONTRADO", "Usuario no encontrado"));
+        return buildTokenResponse(usuario);
     }
 
     @Transactional
@@ -45,9 +47,7 @@ public class AuthService {
             .orElseThrow(() -> new BusinessRuleViolationException("CREDENCIALES_INVALIDAS", "Usuario o contraseña incorrectos"));
         if (!passwordEncoder.matches(req.password(), usuario.getPasswordHash()))
             throw new BusinessRuleViolationException("CREDENCIALES_INVALIDAS", "Usuario o contraseña incorrectos");
-        var roles = usuarioRolRepo.findByUsuarioId(usuario.getId());
-        var role = roles.isEmpty() ? "USER" : roles.get(0).getRol().getCodigo();
-        return new TokenResponse(jwtService.generateToken(usuario.getUsername(), role), "Bearer", usuario.getUsername(), role);
+        return buildTokenResponse(usuario);
     }
 
     @Transactional
@@ -69,12 +69,11 @@ public class AuthService {
             var ur = UsuarioRol.builder().usuario(usuario).rol(rol).build();
             usuarioRolRepo.save(ur);
         }
-        var role = req.rolCodigo() != null ? req.rolCodigo() : "USER";
-        return new TokenResponse(jwtService.generateToken(usuario.getUsername(), role), "Bearer", usuario.getUsername(), role);
+        return buildTokenResponse(usuario);
     }
 
     public void forgotPassword(String email) {
-        var usuario = usuarioRepo.findByEmail(email)
+        usuarioRepo.findByEmail(email)
             .orElseThrow(() -> new BusinessRuleViolationException("EMAIL_NO_ENCONTRADO", "No existe una cuenta con ese email"));
         var code = Base64.getUrlEncoder().withoutPadding().encodeToString(new byte[6]);
         resetCodes.put(email, code);
@@ -91,5 +90,26 @@ public class AuthService {
         usuario.setPasswordHash(passwordEncoder.encode(newPassword));
         usuarioRepo.save(usuario);
         resetCodes.remove(email);
+    }
+
+    private TokenResponse buildTokenResponse(Usuario usuario) {
+        var usuarioRoles = usuarioRolRepo.findByUsuarioId(usuario.getId());
+        List<String> roleCodes = usuarioRoles.stream()
+            .map(ur -> ur.getRol().getCodigo())
+            .toList();
+
+        List<String> permissions = usuarioRoles.stream()
+            .flatMap(ur -> ur.getRol().getRolPermisos().stream())
+            .map(rp -> rp.getPermiso().getCodigo())
+            .distinct()
+            .toList();
+
+        if (roleCodes.isEmpty()) {
+            roleCodes = List.of("USER");
+        }
+
+        var token = jwtService.generateToken(usuario.getUsername(), roleCodes, permissions);
+        var refreshToken = jwtService.generateToken(usuario.getUsername(), roleCodes, permissions);
+        return new TokenResponse(token, refreshToken, usuario.getUsername(), usuario.getEmail(), roleCodes);
     }
 }

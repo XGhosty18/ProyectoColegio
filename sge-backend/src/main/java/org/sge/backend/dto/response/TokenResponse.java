@@ -1,3 +1,5 @@
 package org.sge.backend.dto.response;
 
-public record TokenResponse(String token, String type, String username, String role) {}
+import java.util.List;
+
+public record TokenResponse(String token, String refreshToken, String username, String email, List<String> roles) {}

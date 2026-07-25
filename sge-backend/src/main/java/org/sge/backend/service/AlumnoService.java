@@ -9,6 +9,8 @@ import org.sge.backend.model.entity.Alumno;
 import org.sge.backend.repository.AlumnoRepository;
 import org.sge.backend.repository.EstadoAlumnoRepository;
 import org.sge.backend.repository.PadreRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,10 +26,19 @@ public class AlumnoService {
 
     @Transactional(readOnly = true)
     public List<AlumnoResponse> listar(String estadoCodigo) {
-        var stream = repository.findAll().stream();
-        if (estadoCodigo != null)
-            stream = stream.filter(a -> a.getEstadoActual() != null && a.getEstadoActual().getCodigo().equalsIgnoreCase(estadoCodigo));
-        return stream.map(this::toResponse).toList();
+        if (estadoCodigo != null && !estadoCodigo.isBlank()) {
+            return repository.findByEstadoActualCodigo(estadoCodigo).stream()
+                .map(this::toResponse).toList();
+        }
+        return repository.findAll().stream().map(this::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AlumnoResponse> listarPaginado(String estadoCodigo, Pageable pageable) {
+        if (estadoCodigo != null && !estadoCodigo.isBlank()) {
+            return repository.findByEstadoActualCodigo(estadoCodigo, pageable).map(this::toResponse);
+        }
+        return repository.findAll(pageable).map(this::toResponse);
     }
 
     @Transactional(readOnly = true)

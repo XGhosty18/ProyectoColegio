@@ -26,7 +26,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public TokenResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
-        return service.refresh(request.token());
+        return service.refresh(request.refreshToken());
     }
 
     @PostMapping("/forgot-password")

@@ -22,8 +22,8 @@ server:
   port: 8080
 
 jwt:
-  secret: sge-secret-key-must-be-at-least-256-bits-long-for-hmac-sha-algorithm-1234567890
-  expiration: 86400000
+  secret: ${JWT_SECRET:sge-secret-key-must-be-at-least-256-bits-long-for-hmac-sha-algorithm-1234567890}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 ---
 spring:
@@ -62,9 +62,9 @@ spring:
       on-profile: prod
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/sge
-    username: postgres
-    password: CarlosUTP
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/sge}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:CarlosUTP}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
