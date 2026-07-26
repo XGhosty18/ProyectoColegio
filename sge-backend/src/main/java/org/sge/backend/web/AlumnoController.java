@@ -21,7 +21,14 @@ public class AlumnoController {
     private final AlumnoService service;
 
     @GetMapping
-    public List<AlumnoResponse> listar(@RequestParam(required = false) String estado) {
+    public Object listar(
+            @RequestParam(required = false) String estado,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null) {
+            int pageSize = (size != null && size > 0) ? size : 15;
+            return service.listarPaginado(estado, PageRequest.of(page, pageSize, Sort.by("id").ascending()));
+        }
         return service.listar(estado);
     }
 

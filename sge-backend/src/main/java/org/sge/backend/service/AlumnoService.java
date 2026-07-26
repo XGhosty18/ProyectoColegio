@@ -111,6 +111,11 @@ public class AlumnoService {
     }
 
     private AlumnoResponse toResponse(Alumno a) {
+        List<PadreResponse> padresList = a.getPadres() != null ?
+            a.getPadres().stream().map(p -> new PadreResponse(p.getId(), p.getNombres(), p.getApellidos(), p.getDni(), p.getFechaNac(),
+                p.getGenero(), p.getTelefono(), p.getDireccion(), p.getParentesco(), p.getEsTitular())).toList()
+            : List.of();
+
         return new AlumnoResponse(
             a.getId(), a.getNombres(), a.getApellidos(), a.getDni(), a.getFechaNac(),
             a.getGenero(), a.getTelefono(), a.getDireccion(),
@@ -118,7 +123,8 @@ public class AlumnoService {
             a.getEstadoActual() != null ? a.getEstadoActual().getId() : null,
             a.getEstadoActual() != null ? a.getEstadoActual().getCodigo() : null,
             a.getEstadoActual() != null ? a.getEstadoActual().getNombre() : null,
-            a.getSubEstado(), a.getFechaIngreso()
+            a.getSubEstado(), a.getFechaIngreso(),
+            padresList
         );
     }
 }

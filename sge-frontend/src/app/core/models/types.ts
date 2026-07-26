@@ -6,7 +6,7 @@ export interface ForgotPasswordRequest { email: string }
 export interface ResetPasswordRequest { email: string; codigo: string; nuevaPassword: string }
 
 export interface PeriodoAcademico { id?: number; nombre: string; codigo: string; fechaInicio: string; fechaFin: string; estado: string }
-export interface Alumno { id?: number; nombres: string; apellidos: string; dni: string; fechaNac?: string; genero?: string; telefono?: string; direccion?: string; codigoEstudiante: string; estadoActualId?: number; estadoActualCodigo?: string; estadoActualNombre?: string; subEstado?: string; fechaIngreso?: string }
+export interface Alumno { id?: number; nombres: string; apellidos: string; dni: string; fechaNac?: string; genero?: string; telefono?: string; direccion?: string; codigoEstudiante: string; estadoActualId?: number; estadoActualCodigo?: string; estadoActualNombre?: string; subEstado?: string; fechaIngreso?: string; padres?: Padre[] }
 export interface Docente { id?: number; nombres: string; apellidos: string; dni: string; codigoEmpleado: string; especialidad: string }
 export interface Curso { id?: number; estado: string; periodoId: number; periodoNombre: string; gradoId: number; gradoNombre: string; seccionId: number; seccionNombre: string; materiaId: number; materiaNombre: string; docenteId?: number; docenteNombre?: string; aulaId?: number; aulaNombre?: string }
 export interface Grado { id?: number; nombre: string; nivel: string; orden: number; capacidadMax?: number }

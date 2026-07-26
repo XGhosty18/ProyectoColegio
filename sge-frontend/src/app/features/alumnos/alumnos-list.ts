@@ -1,11 +1,12 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
-import { Alumno, Padre } from '../../core/models/types';
+import { Alumno, Padre, Page } from '../../core/models/types';
 import { Modal } from '../../shared/modal';
 
 @Component({
   selector: 'sge-alumnos-list',
+  standalone: true,
   imports: [FormsModule, Modal],
   template: `
     <div class="page-header">
@@ -17,11 +18,11 @@ import { Modal } from '../../shared/modal';
       <table>
         <thead><tr><th>ID</th><th>Código</th><th>Nombres</th><th>Apellidos</th><th>DNI</th><th>Estado</th><th>Padres</th><th></th></tr></thead>
         <tbody>
-          @for (a of paginaActual; track a.id) {
+          @for (a of alumnos; track a.id) {
             <tr>
               <td>{{ a.id }}</td><td>{{ a.codigoEstudiante }}</td><td>{{ a.nombres }}</td><td>{{ a.apellidos }}</td><td>{{ a.dni }}</td>
               <td><span class="badge">{{ a.estadoActualNombre ?? '—' }}</span></td>
-              <td><button class="btn-sm link" (click)="verPadres(a)">{{ (padresMap[a.id!]?.length || 0) }} padre(s)</button></td>
+              <td><button class="btn-sm link" (click)="verPadres(a)">{{ (a.padres?.length || 0) }} padre(s)</button></td>
               <td class="actions">
                 <button class="btn-sm" (click)="editar(a)">Editar</button>
                 <button class="btn-sm btn-danger" (click)="eliminar(a)">Eliminar</button>
@@ -33,9 +34,9 @@ import { Modal } from '../../shared/modal';
     </div>
     @if (totalPaginas > 1) {
       <div class="pagination">
-        <button class="btn-sm" [disabled]="pagina === 0" (click)="pagina=pagina-1">Anterior</button>
+        <button class="btn-sm" [disabled]="pagina === 0" (click)="cambiarPagina(pagina - 1)">Anterior</button>
         <span>Pág. {{ pagina + 1 }} de {{ totalPaginas }}</span>
-        <button class="btn-sm" [disabled]="pagina >= totalPaginas-1" (click)="pagina=pagina+1">Siguiente</button>
+        <button class="btn-sm" [disabled]="pagina >= totalPaginas - 1" (click)="cambiarPagina(pagina + 1)">Siguiente</button>
       </div>
     }
     <sge-modal [open]="showForm()" [title]="editando() ? 'Editar Alumno' : 'Nuevo Alumno'" (close)="cerrarForm()">
@@ -124,26 +125,44 @@ export class AlumnosList implements OnInit {
   private editId?: number;
   pagina = 0;
   readonly pageSize = 15;
-  get paginaActual() { return this.alumnos.slice(this.pagina * this.pageSize, (this.pagina + 1) * this.pageSize); }
-  get totalPaginas() { return Math.ceil(this.alumnos.length / this.pageSize); }
-  padresMap: Record<number, Padre[]> = {};
+  totalPaginas = 1;
+
   showPadres = signal(false);
   alumnoPadresSeleccionado?: Alumno;
   padresActuales: Padre[] = [];
   todosPadres: Padre[] = [];
   nuevoPadreId = 0;
+
   ngOnInit() { this.cargar(); this.api.get<Padre[]>('/padres').subscribe(r => this.todosPadres = r); }
+
   cargar() {
     this.loading = true;
-    this.api.get<Alumno[]>('/alumnos').subscribe(r => {
-      this.alumnos = r;
-      this.loading = false;
-      r.forEach(a => { if (a.id) this.api.get<Padre[]>('/alumnos/' + a.id + '/padres').subscribe(p => this.padresMap[a.id!] = p); });
+    this.api.get<Page<Alumno> | Alumno[]>(`/alumnos?page=${this.pagina}&size=${this.pageSize}`).subscribe({
+      next: (res) => {
+        if ('content' in res) {
+          this.alumnos = res.content;
+          this.totalPaginas = res.totalPages || 1;
+        } else {
+          this.alumnos = res;
+          this.totalPaginas = Math.ceil(res.length / this.pageSize) || 1;
+        }
+        this.loading = false;
+      },
+      error: () => { this.loading = false; }
     });
   }
+
+  cambiarPagina(nuevaPagina: number) {
+    if (nuevaPagina >= 0 && nuevaPagina < this.totalPaginas) {
+      this.pagina = nuevaPagina;
+      this.cargar();
+    }
+  }
+
   nuevo() { this.editId = undefined; this.editando.set(false); this.form = {}; this.showForm.set(true); }
   editar(a: Alumno) { this.editId = a.id; this.editando.set(true); this.form = { ...a }; this.showForm.set(true); }
   cerrarForm() { this.showForm.set(false); }
+
   guardar() {
     this.saving = true;
     const obs = this.editId ? this.api.put<Alumno>('/alumnos', this.editId, this.form) : this.api.post<Alumno>('/alumnos', this.form);
@@ -161,19 +180,35 @@ export class AlumnosList implements OnInit {
       }
     });
   }
+
   eliminar(a: Alumno) { if (confirm(`¿Eliminar a "${a.nombres} ${a.apellidos}"?`)) this.api.delete('/alumnos', a.id!).subscribe({ next: () => this.cargar() }); }
-  verPadres(a: Alumno) { this.alumnoPadresSeleccionado = a; this.padresActuales = this.padresMap[a.id!] || []; this.showPadres.set(true); }
+
+  verPadres(a: Alumno) {
+    this.alumnoPadresSeleccionado = a;
+    this.padresActuales = a.padres || [];
+    this.showPadres.set(true);
+  }
+
   cerrarPadres() { this.showPadres.set(false); }
+
   asignarPadre() {
     if (!this.alumnoPadresSeleccionado?.id || !this.nuevoPadreId) return;
     this.api.post('/alumnos/' + this.alumnoPadresSeleccionado.id + '/padres', { padreId: this.nuevoPadreId }).subscribe({
-      next: () => { this.verPadres(this.alumnoPadresSeleccionado!); this.cargar(); this.nuevoPadreId = 0; }
+      next: () => {
+        this.cargar();
+        this.cerrarPadres();
+        this.nuevoPadreId = 0;
+      }
     });
   }
+
   desasignarPadre(p: Padre) {
     if (!this.alumnoPadresSeleccionado?.id) return;
     this.api.delete('/alumnos/' + this.alumnoPadresSeleccionado.id + '/padres', p.id!).subscribe({
-      next: () => { this.verPadres(this.alumnoPadresSeleccionado!); this.cargar(); }
+      next: () => {
+        this.cargar();
+        this.cerrarPadres();
+      }
     });
   }
 }

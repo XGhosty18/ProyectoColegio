@@ -15,6 +15,8 @@ public interface CursoRepository extends JpaRepository<Curso, Long> {
 
     List<Curso> findByPeriodoId(Long periodoId);
 
+    List<Curso> findByPeriodoIdAndGradoId(Long periodoId, Long gradoId);
+
     List<Curso> findByDocenteId(Long docenteId);
 
     @Query("SELECT COALESCE(SUM(m.horasSemanalesReq), 0) FROM Curso c JOIN c.materia m WHERE c.docente.id = :docenteId AND c.periodo.id = :periodoId")

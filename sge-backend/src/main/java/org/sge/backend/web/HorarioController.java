@@ -8,6 +8,7 @@ import org.sge.backend.service.HorarioService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/horarios")
@@ -44,5 +45,17 @@ public class HorarioController {
     @DeleteMapping("/{id}")
     public void eliminar(@PathVariable Long id) {
         service.eliminar(id);
+    }
+
+    @PostMapping("/generar-async")
+    public Map<String, String> generarAsincrono(@RequestParam Long periodoId) {
+        String jobId = service.iniciarGeneracionAsincrona(periodoId);
+        return Map.of("jobId", jobId, "estado", "EN_PROCESO");
+    }
+
+    @GetMapping("/jobs/{jobId}")
+    public Map<String, String> obtenerEstadoTrabajo(@PathVariable String jobId) {
+        String estado = service.obtenerEstadoTrabajo(jobId);
+        return Map.of("jobId", jobId, "estado", estado);
     }
 }

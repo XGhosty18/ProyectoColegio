@@ -28,7 +28,7 @@ public class CursoService {
     public List<CursoResponse> listar(Long periodoId, Long gradoId, Long docenteId) {
         if (docenteId != null) return repository.findByDocenteId(docenteId).stream().map(this::toResponse).toList();
         if (periodoId != null && gradoId != null)
-            return repository.findByPeriodoId(periodoId).stream().filter(c -> c.getGrado().getId().equals(gradoId)).map(this::toResponse).toList();
+            return repository.findByPeriodoIdAndGradoId(periodoId, gradoId).stream().map(this::toResponse).toList();
         if (periodoId != null) return repository.findByPeriodoId(periodoId).stream().map(this::toResponse).toList();
         return repository.findAll().stream().map(this::toResponse).toList();
     }
